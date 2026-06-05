@@ -207,3 +207,10 @@ documents/*
 # Intake fingerprints — the recorded source filenames may themselves carry
 # PII (e.g. cv/jane-doe-master-cv.pdf). #1723
 data/intake-state.json
+
+# python-jobspy virtualenv (local; friends create their own)
+.venv-jobspy/
+
+# Python bytecode (jobspy scripts)
+__pycache__/
+*.pyc

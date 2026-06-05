@@ -109,6 +109,25 @@ During the agent's scan, keep the **`local_parser_ok`** set in memory. This set 
 
 **Recommended Level 0:** run `node scan.mjs` (or `npm run scan`) at the start of the agent's workflow. This covers local parsers + APIs in a single zero-token step and returns which companies used the `local-parser` successfully.
 
+### Level 0b — JobSpy board discovery (zero-token, optional)
+
+`scan.mjs` integrates **JobSpy** (`python-jobspy`) as a board-discovery layer: it scrapes Indeed, Google Jobs, Glassdoor (and LinkedIn, opt-in) directly — sources the `tracked_companies` ATS APIs don't cover and that agent WebSearch (Level 3) can't reliably extract (LinkedIn/jobs.ch tend to return index pages, not offers). It is **zero-token**: when enabled, `scan.mjs` runs the discovery as one more scan target, so results flow through the **same** title/location filters and dedup as every provider.
+
+**It is opt-in** because it needs a one-time Python install:
+
+```bash
+python3 -m venv .venv-jobspy && .venv-jobspy/bin/pip install python-jobspy
+```
+
+or `npm run jobspy:setup`. Then keep `jobspy.enabled: true` in `portals.yml` (the shipped template ships it enabled). If it is enabled but Python or the module is missing, `scan.mjs` reports the error **loud and clear** (no silent fallback) and continues with the rest of the scan.
+
+**Key rules:**
+- **Novelty is guaranteed by URL dedup** (`scan-history.tsv`), NOT by the `hours_old` window. `hours_old` only caps how far back the search reaches to reduce noise; a search-engine date filter is unreliable (index date ≠ posting date).
+- `node scan.mjs --since-last-scan` derives `hours_old` from the newest `scan-history.tsv` entry.
+- **LinkedIn is off by default** (`sites:` without `linkedin`): it rate-limits aggressively without proxies. Indeed is the most stable; Google Jobs aggregates Greenhouse/Ashby/Lever postings.
+- Skipped when `--company` is used (the search is board-wide, not per company).
+- Offers land in `scan-history.tsv` tagged with the JobSpy source; per-site detail is in the run summary (`raw` vs `deduped` counts).
+
 ### Level 1 — Direct Playwright (PRIMARY)
 
 **For each company in `tracked_companies` that is not in `local_parser_ok`:** Navigate to its `careers_url` with Playwright (`browser_navigate` + `browser_snapshot`), read ALL visible job listings, and extract the title + URL for each. This is the most reliable method because:

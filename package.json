@@ -45,6 +45,7 @@
     "verify:portals": "node verify-portals.mjs",
     "tracker": "node tracker.mjs",
     "find": "node find.mjs",
+    "jobspy:setup": "node setup-jobspy.mjs",
     "patterns": "node analyze-patterns.mjs",
     "calibrate": "node calibrate.mjs",
     "upskill": "node upskill.mjs",

@@ -1557,6 +1557,37 @@ search_queries:
 #     provider: lever
 #     aggregator: true
 
+# -- JobSpy board discovery (optional) --
+# Zero-token board scraper (python-jobspy) that reaches postings no tracked ATS
+# covers: LinkedIn, Indeed, Glassdoor, Google Jobs. scan.mjs runs the discovery
+# as one more scan target and feeds the results through the same
+# title/location filter + dedup. Novelty is guaranteed by URL dedup
+# (scan-history.tsv), NOT by hours_old. `node scan.mjs --since-last-scan` caps
+# hours_old to the time since your last scan.
+#
+# One-time install (creates .venv-jobspy/, which scan.mjs auto-detects):
+#   npm run jobspy:setup
+# It's enabled below so it runs by default once set up. If you skip setup,
+# scan.mjs reports one clear error telling you to run it and continues the
+# rest of the scan — set enabled: false to silence it entirely.
+jobspy:
+  enabled: true
+  # python:                         # optional — omit to auto-use .venv-jobspy.
+  #                                 # Set only to point at a different interpreter.
+  sites:                            # LinkedIn omitted by default — it rate-limits
+    - indeed                        # without proxies. Add "linkedin" once proxies
+    - google                        # are configured (it reaches roles the others
+    - glassdoor                     # miss — LinkedIn-only and custom-ATS postings).
+  search_terms:                     # [CUSTOMIZE] your target roles
+    - "AI Engineer"
+    - "Machine Learning Engineer"
+    - "MLOps"
+  locations:                        # [CUSTOMIZE] your target locations
+    - "Remote"
+  results_wanted: 25
+  hours_old: 168                    # 7 days; dedup handles novelty regardless
+  country_indeed: USA
+
 tracked_companies:
 
   # -- AI Labs & LLM providers --

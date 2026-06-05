@@ -214,7 +214,12 @@ Fill in `config/profile.yml` (including `spend_tier`, default `standard`). Arche
 If `portals.yml` is missing:
 > "I'll set up the job scanner with 45+ pre-configured companies. Want me to customize the search keywords for your target roles?"
 
-Copy `templates/portals.example.yml` → `portals.yml`; if they gave target roles in Step 2, update `title_filter.positive`.
+Copy `templates/portals.example.yml` → `portals.yml`. If they gave target roles in Step 2, update `title_filter.positive` to match (and `jobspy.search_terms` / `jobspy.locations` likewise).
+
+**JobSpy board discovery (recommended):** The scanner can also pull from LinkedIn/Indeed/Glassdoor/Google Jobs via `python-jobspy` — this reaches roles no tracked ATS covers. It's enabled in the template but needs a one-time install. Offer to run it:
+> "Want me to enable board discovery (LinkedIn/Indeed/Glassdoor)? It catches roles the company APIs miss. One-time setup."
+
+If yes, run `npm run jobspy:setup` (creates `.venv-jobspy/`, auto-detected by the scanner). Requires Python 3. If they decline or it fails, set `jobspy.enabled: false` in `portals.yml`.
 
 #### Step 4: Tracker
 If `data/applications.md` doesn't exist, create it:

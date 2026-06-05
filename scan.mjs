@@ -2140,6 +2140,24 @@ export function loadSeenCompanyRoles(
   }, policy, canonicalize, { includeLocation, locatedBases });
 }
 
+// Hours since the most recent scan-history entry. scan-history dates are
+// day-granular, so this is coarse — it powers `--since-last-scan`, which feeds
+// JobSpy's hours_old to cap how far back a discovery run reaches. Returns null
+// when history is empty/unparseable so the caller falls back to the configured
+// hours_old. Novelty is still guaranteed by URL dedup, not by this window.
+function hoursSinceLastScan() {
+  if (!existsSync(SCAN_HISTORY_PATH)) return null;
+  const lines = readFileSync(SCAN_HISTORY_PATH, 'utf-8').split('\n').slice(1);
+  let maxDate = null;
+  for (const line of lines) {
+    const d = line.split('\t')[1];
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d) && (!maxDate || d > maxDate)) maxDate = d;
+  }
+  if (!maxDate) return null;
+  const ms = Date.now() - Date.parse(`${maxDate}T00:00:00Z`);
+  return Math.max(24, Math.ceil(ms / 3_600_000));
+}
+
 // ── Pipeline writer ─────────────────────────────────────────────────
 
 function normalizeScanScalar(value) {
@@ -3093,6 +3111,25 @@ async function main() {
     });
   }
 
+  // Shared ingestion path: title + location filter → URL dedup → accumulate.
+  // Used by the JobSpy discovery step; HTTP providers run the richer inline
+  // filter chain in the fetch loop below (trust, blacklist, tier/visa/salary,
+  // cooldowns, location-aware dedup keys). A per-job `source`
+  // (set by JobSpy as `jobspy-<site>`) wins over the caller's default label.
+  function ingest(jobs, sourceName) {
+    totalFound += jobs.length;
+    for (const job of jobs) {
+      if (!titleFilter(job.title)) { totalFilteredTitle++; continue; }
+      if (!locationFilter(job.location)) { totalFilteredLocation++; continue; }
+      if (seenUrls.has(job.url)) { totalDupes++; continue; }
+      const key = `${(job.company || '').toLowerCase()}::${job.title.toLowerCase()}`;
+      if (seenCompanyRoles.has(key)) { totalDupes++; continue; }
+      seenUrls.add(job.url);
+      seenCompanyRoles.add(key);
+      newOffers.push({ ...job, source: job.source || sourceName });
+    }
+  }
+
   const tasks = targets.map(company => async () => {
     let provider = company._provider;
     // includeUndated is deliberately ALWAYS true, independent of the window.
@@ -3296,6 +3333,28 @@ async function main() {
 
   await parallelFetch(tasks, CONCURRENCY);
 
+  // 5b. JobSpy board discovery — opt-in, zero-token Python subprocess.
+  // Board-wide scrape (Indeed/Google/Glassdoor by default; LinkedIn opt-in)
+  // for companies no tracked ATS covers. Feeds the same ingest() path as
+  // providers. Skipped when a single --company is targeted (board-wide search
+  // can't be scoped to one tracked company). Dynamic import keeps the default
+  // provider-only path free of any JobSpy startup cost.
+  let jobspyMeta = null;
+  if (config.jobspy?.enabled && !filterCompany) {
+    const sinceLast = args.includes('--since-last-scan') ? hoursSinceLastScan() : null;
+    try {
+      const { runJobspy } = await import('./jobspy-scan.mjs');
+      const res = await runJobspy(config.jobspy, sinceLast ? { hoursOld: sinceLast } : {});
+      jobspyMeta = res.meta;
+      ingest(res.jobs, 'jobspy');
+      for (const e of res.errors) {
+        errors.push({ company: `JobSpy (${e.location || 'all'} / ${e.term || '?'})`, error: e.message });
+      }
+    } catch (err) {
+      errors.push({ company: 'JobSpy', error: err.message });
+    }
+  }
+
   // 5.5. Optional liveness verification — drop expired and guard-rejected postings
   let verifiedOffers = newOffers;
   let expiredOffers = [];
@@ -3435,6 +3494,9 @@ async function main() {
   }
   if (historyPolicy.recheckAfterDays != null) {
     console.log(`Recheck eligible:      ${dedupSnapshot.recheckEligible} old scan-history URL(s)`);
+  }
+  if (jobspyMeta) {
+    console.log(`JobSpy discovery:      ${jobspyMeta.raw_count ?? 0} raw, ${jobspyMeta.deduped_count ?? 0} after board-dedup (hours_old=${jobspyMeta.hours_old ?? 'n/a'})`);
   }
   if (verify) {
     console.log(`Expired (verified):    ${expiredOffers.length} dropped`);
