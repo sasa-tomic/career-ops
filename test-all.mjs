@@ -2399,6 +2399,66 @@ try {
   fail(`tracker.mjs removeRowByNum test crashed: ${e.message}`);
 }
 
+// ── 9c. JOBSPY DISCOVERY INTEGRATION ─────────────────────────────
+
+console.log('\n9c. JobSpy discovery');
+
+if (
+  scanScript.includes("import('./jobspy-scan.mjs')") &&
+  scanScript.includes('config.jobspy?.enabled') &&
+  scanScript.includes('ingest(res.jobs')
+) {
+  pass('scan.mjs wires the JobSpy discovery step into ingest()');
+} else {
+  fail('scan.mjs does not wire JobSpy discovery into the ingest path');
+}
+
+for (const f of ['jobspy-scan.mjs', 'scripts/jobspy-scan.py', 'providers/workable.mjs']) {
+  if (fileExists(f)) pass(`${f} exists`);
+  else fail(`${f} is missing`);
+}
+
+if (scanMode.includes('jobspy') || scanMode.includes('JobSpy')) {
+  pass('scan.md documents the JobSpy discovery layer');
+} else {
+  fail('scan.md does not document the JobSpy discovery layer');
+}
+
+try {
+  const { normalizeJobspyJobs, buildJobspyConfig } = await import(pathToFileURL(join(ROOT, 'jobspy-scan.mjs')).href);
+
+  const norm = normalizeJobspyJobs([
+    { title: 'SRE', url: 'https://x.com/j/1', company: 'Acme', location: 'Zurich', site: 'indeed' },
+    { title: 'No URL', url: '', company: 'Acme' },          // dropped: no url
+    { title: '', url: 'https://x.com/j/2', company: 'Acme' }, // dropped: no title
+    { title: 'FTP', url: 'ftp://x/1', company: 'Acme' },      // dropped: non-http
+  ]);
+  if (norm.length === 1 && norm[0].source === 'jobspy-indeed' && norm[0].url === 'https://x.com/j/1' && norm[0].company === 'Acme') {
+    pass('normalizeJobspyJobs keeps valid jobs, drops url/title/protocol-invalid');
+  } else {
+    fail(`normalizeJobspyJobs filtering wrong: ${JSON.stringify(norm)}`);
+  }
+
+  let threw = false;
+  try { normalizeJobspyJobs('nope'); } catch { threw = true; }
+  if (threw) pass('normalizeJobspyJobs throws on non-array input');
+  else fail('normalizeJobspyJobs should throw on non-array input');
+
+  const cfg = buildJobspyConfig({ search_terms: ['sre'] }, { hoursOld: 48 });
+  if (cfg.hours_old === 48 && cfg.results_wanted === 20 && cfg.sites.length === 3 && cfg.locations.length === 1) {
+    pass('buildJobspyConfig applies defaults + hoursOld override');
+  } else {
+    fail(`buildJobspyConfig defaults wrong: ${JSON.stringify(cfg)}`);
+  }
+
+  let cfgThrew = false;
+  try { buildJobspyConfig({ search_terms: [] }, {}); } catch { cfgThrew = true; }
+  if (cfgThrew) pass('buildJobspyConfig throws when search_terms is empty');
+  else fail('buildJobspyConfig should throw on empty search_terms');
+} catch (e) {
+  fail(`JobSpy helper tests failed to set up: ${e.message}`);
+}
+
 // ── 10. PORTALS CONFIG VALIDATOR ────────────────────────────────
 
 console.log('\n10. Portals config validator');
@@ -2503,6 +2563,13 @@ tracked_companies:
     pass('validate-portals accepts templates/portals.example.yml');
   } else {
     fail('validate-portals should accept templates/portals.example.yml');
+  }
+
+  const zurichExampleResult = run(NODE, ['validate-portals.mjs', '--file', 'templates/portals.zurich-systems.example.yml']);
+  if (zurichExampleResult !== null && zurichExampleResult.includes('0 errors')) {
+    pass('validate-portals accepts templates/portals.zurich-systems.example.yml');
+  } else {
+    fail('validate-portals should accept templates/portals.zurich-systems.example.yml');
   }
 
   const invalidProviderResult = run(NODE, ['validate-portals.mjs', '--file', invalidProviderPath]);
