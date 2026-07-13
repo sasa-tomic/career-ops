@@ -107,6 +107,24 @@ During the agent's scan, keep the **`local_parser_ok`** set in memory. This set 
 
 **Recommended Level 0:** run `node scan.mjs` (or `npm run scan`) at the start of the agent's workflow. This covers local parsers + APIs in a single zero-token step and returns which companies used the `local-parser` successfully.
 
+### Level 0b — JobSpy Board Discovery (ZERO-TOKEN)
+
+`scan.mjs` integrates **JobSpy** (`python-jobspy`) as a board-discovery layer: it scrapes LinkedIn, Indeed, Glassdoor, and Google Jobs directly. These sources catch postings that tracked ATS APIs do not cover and that agent WebSearch often misses. It is zero-token: `scan.mjs` spawns `scripts/jobspy-scan.py`, normalizes the JSON output, and feeds it through the same title, location, salary, and dedup filters as provider results.
+
+**Opt-in setup:**
+
+```bash
+npm run jobspy:setup
+```
+
+Then configure the `jobspy:` block in `portals.yml`. If `jobspy.enabled: true` but Python or `python-jobspy` is missing, `scan.mjs` reports a clear error and continues the rest of the scan.
+
+**Key rules:**
+- Novelty is guaranteed by URL dedup (`scan-history.tsv`), not by the `hours_old` window. `hours_old` only limits how far back board search goes to reduce noise.
+- `node scan.mjs --since-last-scan` derives `hours_old` from the last `scan-history.tsv` entry.
+- JobSpy is skipped when `--company` is used because board discovery is not scoped to one tracked company.
+- Each offer is tagged in `scan-history.tsv` with `source = jobspy-{site}`.
+
 ### Level 1 — Direct Playwright (PRIMARY)
 
 **For each company in `tracked_companies` that is not in `local_parser_ok`:** Navigate to its `careers_url` with Playwright (`browser_navigate` + `browser_snapshot`), read ALL visible job listings, and extract the title + URL for each. This is the most reliable method because:
