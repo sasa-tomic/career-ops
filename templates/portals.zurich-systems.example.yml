@@ -1,0 +1,321 @@
+# Portal Scanner Configuration — Zurich / Switzerland, systems & infrastructure
+# ============================================================================
+# A turn-key starting point for a Staff/Principal/Lead systems engineer
+# searching in Zurich and the wider Swiss / EU-remote market:
+# distributed systems, reliability/SRE, platform, storage, HPC, performance,
+# and research-engineer roles.
+#
+# It is the smaller, focused sibling of templates/portals.example.yml (which
+# carries 100+ companies with an AI/automation slant). Pick whichever fits.
+#
+# QUICK START (see docs/zurich-quickstart.md for the full walkthrough):
+#   1. cp templates/portals.zurich-systems.example.yml portals.yml
+#   2. Tweak title_filter.positive to YOUR exact target titles
+#   3. Add companies under tracked_companies (the scanner auto-detects
+#      Greenhouse / Ashby / Lever / Workday from the careers_url)
+#   4. Run:  /career-ops scan   (or: node scan.mjs)
+
+# -- Location filter --------------------------------------------------------
+# Keeps results to Switzerland and remote-in-Europe. `always_allow` rescues
+# multi-location postings ("5 Locations") that include your region. Empty or
+# non-string locations always pass, so nothing is dropped on missing data.
+location_filter:
+  always_allow:
+    - "Switzerland"
+    - "Zurich"
+    - "Zürich"
+    - "Geneva"
+    - "Genève"
+    - "Genf"
+    - "Basel"
+    - "Bern"
+    - "Lausanne"
+    - "Zug"
+    - "Lugano"
+    - "St. Gallen"
+    - "Heerbrugg"
+  allow:
+    - "Switzerland"
+    - "Schweiz"
+    - "Suisse"
+    - "Svizzera"
+    - "Zurich"
+    - "Zürich"
+    - "Geneva"
+    - "Genève"
+    - "Genf"
+    - "Basel"
+    - "Bern"
+    - "Lausanne"
+    - "Zug"
+    - "Lugano"
+    - "St. Gallen"
+    - "Heerbrugg"
+    - "Remote"
+    - "Europe"
+    - "EMEA"
+  # A bare "Remote" in `allow` lets US/APAC-remote roles leak in. These block a
+  # CH-only search's non-EU noise; `always_allow` (CH cities) still rescues any
+  # multi-region posting that also lists a Swiss location.
+  block:
+    - "United States"
+    - "USA"
+    - "U.S."
+    - "- US"
+    - "US Remote"
+    - "New York"
+    - "San Francisco"
+    - "North America"
+    - "Canada"
+    - "India"
+    - "Bangalore"
+    - "Singapore"
+    - "APAC"
+    - "LATAM"
+    - "Costa Rica"
+    - "Vietnam"
+
+# -- Title filter -----------------------------------------------------------
+# A title passes when >=1 positive matches AND 0 negatives match (case-insensitive).
+# Tuned for senior systems/infra/reliability/storage/research engineering.
+title_filter:
+  positive:
+    # Seniority / leadership
+    - "Staff Engineer"
+    - "Principal Engineer"
+    - "Distinguished Engineer"
+    - "Senior Software Engineer"
+    - "Senior Systems"
+    - "Engineering Manager"
+    - "Engineering Lead"
+    - "Team Lead"
+    - "Team Leader"
+    - "Tech Lead"
+    - "Technical Lead"
+    - "Head of Engineering"
+    - "Head of Infrastructure"
+    - "Head of Platform"
+    - "Director of Engineering"
+    # Systems / reliability / infrastructure
+    - "Distributed Systems"
+    - "Systems Engineer"
+    - "Infrastructure"
+    - "Platform Engineer"
+    - "Reliability"
+    - "DevOps"
+    - "SRE"
+    - "Site Reliability"
+    - "Observability"
+    - "Kubernetes"
+    - "Backend Engineer"
+    - "Performance"
+    - "Cloud Architect"
+    - "Software Architect"
+    # Storage / low-level / HPC
+    - "Storage"
+    - "Firmware"
+    - "Compiler"
+    - "HPC"
+    - "Accelerator"
+    - "Architect"
+    # Research-adjacent
+    - "Research Engineer"
+  negative:
+    - "Junior"
+    - "Intern"
+    - "Working Student"
+    - "Graduate"
+    - "Apprentice"
+    - "Frontend"
+    - "iOS"
+    - "Android"
+    - "Salesforce"
+    - "SAP "
+    - "Sales"
+    - "Account Executive"
+    - "Recruiter"
+    - "Marketing"
+    - "Solution Architect"   # NVIDIA et al. use this for pre-sales, not systems eng
+
+# -- Companies --------------------------------------------------------------
+# The scanner auto-detects the provider from the careers_url:
+#   *.greenhouse.io  → greenhouse     *.ashbyhq.com → ashby
+#   *.lever.co       → lever          *.myworkdayjobs.com → workday (set provider: workday)
+#   *.onlyfy.jobs    → onlyfy         (set provider: onlyfy to be explicit)
+# Big-tech offices in Zurich (Google, Amazon, Apple, Oracle, Meta) run bespoke
+# ATSes, but their careers pages/APIs ARE scrapable zero-token via the parsers in
+# scripts/parsers/*-careers.mjs (wired below — each hard-fails if it can't match
+# the site's own result count, so it never silently under-delivers). Microsoft's
+# API is TLS-blocked in some environments, so it stays a flagged websearch handoff
+# until reachable.
+#
+# NVIDIA (Zurich AI lab) runs on Workday. Find the locationHierarchy1 facet id
+# for your region in the `facets` array of any CXS response (see
+# docs/zurich-quickstart.md), then drop it in below.
+tracked_companies:
+  - name: NVIDIA
+    provider: workday
+    careers_url: https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite
+    workday:
+      facets:
+        locationHierarchy1: ["<switzerland-facet-id>"]   # see quickstart to find this
+      location_label: "Switzerland"
+    enabled: true
+
+  # -- Big-tech Zurich (zero-token via scripts/parsers/*-careers.mjs; each hard-fails
+  #    loudly if it can't reach the site's own result count) --
+
+  - name: Google
+    careers_url: 'https://www.google.com/about/careers/applications/jobs/results/?location=Zurich,+Switzerland&employment_type=FULL_TIME'
+    scan_method: local_parser
+    parser:
+      command: node
+      script: scripts/parsers/google-careers.mjs
+      args:
+        - "{careers_url}"
+      timeout_ms: 60000
+    notes: "Zürich CH. Server-rendered careers results page, paginated by the parser."
+    enabled: true
+
+  - name: Amazon
+    careers_url: 'https://www.amazon.jobs/en/search.json?loc_query=Zurich,%20Switzerland&country=CHE&sort=recent'
+    scan_method: local_parser
+    parser:
+      command: node
+      script: scripts/parsers/amazon-careers.mjs
+      args:
+        - "{careers_url}"
+      timeout_ms: 60000
+    notes: "Zürich CH (AWS + AGI). Public amazon.jobs search.json API."
+    enabled: true
+
+  - name: Apple
+    careers_url: 'https://jobs.apple.com/en-us/search?location=switzerland-CHEC'
+    scan_method: local_parser
+    parser:
+      command: node
+      script: scripts/parsers/apple-careers.mjs
+      args:
+        - "{careers_url}"
+      timeout_ms: 60000
+    notes: "Zürich CH (AI/ML + hardware). CSRF + search API flow."
+    enabled: true
+
+  - name: Oracle
+    careers_url: 'https://careers.oracle.com/'
+    scan_method: local_parser
+    parser:
+      command: node
+      script: scripts/parsers/oracle-careers.mjs
+      args:
+        - "{careers_url}"
+      timeout_ms: 60000
+    notes: "Zürich/Geneva CH. Self-discovers the Oracle Recruiting Cloud API."
+    enabled: true
+
+  - name: Meta
+    careers_url: 'https://www.metacareers.com/jobs/?offices[0]=Zurich%2C%20Switzerland'
+    scan_method: local_parser
+    parser:
+      command: node
+      script: scripts/parsers/meta-careers.mjs
+      args:
+        - "{careers_url}"
+      timeout_ms: 60000
+    notes: "Zürich CH office. GraphQL LSD flow; rate-limit aware (hard-fails, never silent)."
+    enabled: true
+
+  - name: Microsoft
+    careers_url: https://careers.microsoft.com
+    scan_method: websearch
+    scan_query: 'site:careers.microsoft.com "Zurich" "Principal" OR "Senior Software Engineer" OR "Engineering Manager"'
+    notes: "Zürich CH. Parser staged at scripts/parsers/microsoft-careers.mjs, but the gcsservices API is TLS-blocked in some environments; flip to local_parser once reachable."
+    enabled: true
+
+  # -- Switzerland tech (verified Greenhouse / Ashby / Lever / onlyfy boards) --
+
+  - name: SonarSource
+    careers_url: https://jobs.lever.co/sonarsource
+    notes: "Geneva CH. Code quality & security platform (SonarQube). Strong backend/infra hiring."
+    enabled: true
+
+  - name: Frontify
+    careers_url: https://jobs.lever.co/frontify
+    notes: "St. Gallen CH. Brand management SaaS scaleup."
+    enabled: true
+
+  - name: AnyBotics
+    careers_url: https://jobs.lever.co/anybotics
+    notes: "Zurich CH. Legged robotics for industrial inspection; ETH spin-off. Robotics/systems/reliability roles."
+    enabled: true
+
+  - name: Proton
+    careers_url: https://job-boards.eu.greenhouse.io/proton
+    api: https://boards-api.greenhouse.io/v1/boards/proton/jobs
+    notes: "Geneva CH. Privacy tech (Proton Mail/VPN/Drive). Geneva/Zurich infra & backend roles."
+    enabled: true
+
+  - name: DeepJudge
+    careers_url: https://jobs.ashbyhq.com/deepjudge
+    notes: "Zurich CH. AI-powered knowledge search for law firms; ETH spin-off."
+    enabled: true
+
+  - name: Parashift
+    careers_url: https://jobs.ashbyhq.com/parashift
+    notes: "Basel CH. Document-processing AI / intelligent data extraction platform."
+    enabled: true
+
+  - name: Lakera
+    careers_url: https://jobs.ashbyhq.com/lakera.ai
+    notes: "Zurich CH / SF. AI security & guardrails. Has Forward Deployed Engineer roles."
+    enabled: true
+
+  - name: Scandit
+    careers_url: https://job-boards.greenhouse.io/scandit
+    api: https://boards-api.greenhouse.io/v1/boards/scandit/jobs
+    notes: "Zurich CH. Computer vision / smart data capture, ML roles."
+    enabled: true
+
+  - name: Cradle
+    careers_url: https://jobs.ashbyhq.com/cradlebio
+    notes: "Zurich CH / Amsterdam. AI-guided protein design, ML researcher roles."
+    enabled: true
+
+  - name: Leica Geosystems
+    careers_url: https://leica-geosystems-ag.onlyfy.jobs/de
+    provider: onlyfy
+    notes: "Heerbrugg CH (Hexagon). Surveying / geospatial / industrial measurement hardware + software. onlyfy.jobs (Prescreen) portal."
+    enabled: true
+
+  - name: Hexagon Robotics
+    careers_url: https://hexagon-robotics.onlyfy.jobs/en
+    provider: onlyfy
+    notes: "Zürich CH (Hexagon, incl. ANYbotics). Autonomous/legged robotics for industrial inspection. onlyfy.jobs portal; keep /en locale."
+    enabled: true
+
+  - name: Inventx
+    careers_url: https://inventx.onlyfy.jobs/de
+    provider: onlyfy
+    notes: "Swiss IT consulting (St. Gallen/Zürich CH). Data-platform, DevOps, database & automation engineering roles. onlyfy.jobs portal."
+    enabled: true
+
+  # -- Crypto / Web3 infrastructure --
+
+  - name: Alpen Labs
+    careers_url: https://jobs.ashbyhq.com/alpenlabs
+    notes: "Bitcoin-native ZK/L2 protocol infrastructure (Strata). Rust, systems, protocol engineering and engineering leadership roles."
+    enabled: true
+
+  # Add more here. Examples of how each provider looks once you have the board URL:
+  # - name: Example (Greenhouse)
+  #   careers_url: https://job-boards.greenhouse.io/<company>
+  #   enabled: true
+  # - name: Example (Ashby)
+  #   careers_url: https://jobs.ashbyhq.com/<company>
+  #   enabled: true
+  # - name: Example (Lever)
+  #   careers_url: https://jobs.lever.co/<company>
+  #   enabled: true
+  #
+  # Tip: the big portals.example.yml already has 100+ companies with verified
+  # provider mappings — copy any that interest you straight into this file.

@@ -72,14 +72,34 @@ node update-system.mjs check
 Parse the JSON output:
 - `{"status": "update-available", "local": "1.0.0", "remote": "1.1.0", "changelog": "..."}` → tell the user:
   > "career-ops update available (v{local} → v{remote}). Your data (CV, profile, tracker, reports) will NOT be touched. Want me to update?"
-  If yes → run `node update-system.mjs apply`. If no → run `node update-system.mjs dismiss`.
+  If yes → update via rebase (see below). If no → run `node update-system.mjs dismiss`.
 - `{"status": "up-to-date"}` → say nothing
 - `{"status": "dismissed"}` → say nothing
 - `{"status": "offline"}` → say nothing
 - `{"status": "no-remote-version"}` → say nothing (checker reached GitHub but neither VERSION nor the latest release tag parsed as semver — treat as a silent non-failure, same as offline)
 
 The user can also say "check for updates" or "update career-ops" at any time to force a check.
-To rollback: `node update-system.mjs rollback`
+
+### Applying an update — always rebase, never `update-system.mjs apply`
+
+If this is a real git checkout (not a zip/download with no git history), update by rebasing onto the canonical repo instead of using `update-system.mjs apply`. `apply`'s checkout-and-commit approach only syncs system-layer *file contents* from a fetched snapshot — it never merges git history, so a repo with local commits (custom providers, local fixes, local docs) silently keeps diverging from upstream commit-by-commit even after a successful "apply". Its self-reexec bootstrap step can also break outright across releases that add a new top-level import to `update-system.mjs` itself (checks out only `update-system.mjs` before re-executing it, so a fresh import target that doesn't exist yet crashes the process — always verify a "module not found" failure by checking if the file genuinely exists on the target ref before assuming the release is broken).
+
+```bash
+git status --porcelain          # must be clean before rebasing — commit or stash first
+git fetch https://github.com/santifer/career-ops.git main
+git rebase FETCH_HEAD
+```
+
+- On conflicts, resolve file by file — don't `--skip` or blindly pick one side:
+  - Check `git show <local-commit>` for what that commit actually added before resolving. A local commit's feature (e.g. a locally-added provider or scanner integration) is often still relevant even when upstream restructured the surrounding code — reintegrate it into the new structure rather than dropping it.
+  - When both sides purely *add* independent content at the same point (new package.json script, new test section, new provider registered in the same list), keep both — concatenate, don't choose.
+  - Only fully prefer upstream's side when local's version of that exact file/feature has since been superseded by an equivalent (or better) upstream implementation — verify this concretely (e.g. check whether current `portals.yml`/config already matches upstream's field names) rather than assuming.
+  - After resolving each file, syntax-check it (`node --check file.mjs`, `node -e "JSON.parse(...)"` for JSON) before `git add` and `git rebase --continue`.
+- `git rebase --abort` is always safe before the rebase completes — nothing is lost until then.
+- After the rebase finishes, run `node test-all.mjs`. A local-only file not yet listed in `update-system.mjs`'s `SYSTEM_PATHS` (checked by `validate-system-paths-coverage.mjs`) is a common post-rebase gap — add it there rather than deleting the file.
+- Never `git push --force` or rewrite already-pushed history without the user's explicit go-ahead.
+
+To rollback the checkout-based `apply` method: `node update-system.mjs rollback`. To undo a rebase, use `git reflog` to find the pre-rebase commit and confirm with the user before `git reset --hard <sha>`.
 
 ## What is career-ops
 
@@ -184,7 +204,12 @@ Fill in `config/profile.yml` with their answers, including `spend_tier` (default
 If `portals.yml` is missing:
 > "I'll set up the job scanner with 45+ pre-configured companies. Want me to customize the search keywords for your target roles?"
 
-Copy `templates/portals.example.yml` → `portals.yml`. If they gave target roles in Step 2, update `title_filter.positive` to match.
+Copy `templates/portals.example.yml` → `portals.yml`. If they gave target roles in Step 2, update `title_filter.positive` to match (and `jobspy.search_terms` / `jobspy.locations` likewise).
+
+**JobSpy board discovery (recommended):** The scanner can also pull from LinkedIn/Indeed/Glassdoor/Google Jobs via `python-jobspy` — this reaches roles no tracked ATS covers. It's enabled in the template but needs a one-time install. Offer to run it:
+> "Want me to enable board discovery (LinkedIn/Indeed/Glassdoor)? It catches roles the company APIs miss. One-time setup."
+
+If yes, run `npm run jobspy:setup` (creates `.venv-jobspy/`, auto-detected by the scanner). Requires Python 3. If they decline or it fails, set `jobspy.enabled: false` in `portals.yml`.
 
 #### Step 4: Tracker
 If `data/applications.md` doesn't exist, create it:
@@ -342,6 +367,29 @@ These are two separate axes:
 - `cv.md` in project root is the canonical CV
 - `article-digest.md` has detailed proof points (optional)
 - **NEVER hardcode metrics** -- read them from these files at evaluation time
+
+### Output File Naming (output/)
+
+- **All files in `output/` MUST start with `YYYY-MM-DD-`** so the directory sorts chronologically. This applies to CVs, cover letters, one-pagers, and any other generated artifacts.
+- Naming scheme: `{YYYY-MM-DD}-{type}-{company}[-{role-slug}].{ext}`
+  - `type` ∈ `cv`, `cover-letter`, or a descriptive slug for other artifacts.
+  - Company is lowercase-kebab. Optional `{role-slug}` disambiguates multiple roles at the same company (e.g., NVIDIA).
+  - Do NOT include the candidate's name — `output/` is personal and the name is redundant.
+- Examples:
+  - `2026-06-18-cover-letter-enterprisedb.pdf` (+ `.tex` source)
+  - `2026-05-19-cv-anybotics.pdf`
+  - `2026-05-29-cv-nvidia-hpc-performance-engineer.pdf`
+  - `2026-05-29-cover-letter-nvidia-principal-ai-devtech.pdf`
+  - `2026-06-04-consultancy-capability-onepager.md`
+- Date = the date the artifact was generated (or the application date), not the posting date.
+
+### Cover Letter Formatting
+
+- For this workspace, cover-letter PDFs should match the existing `output/{date}-cover-letter-*.pdf` files (legacy LaTeX `moderncv` style) unless the user explicitly asks for a different format.
+- The matching format is the legacy LaTeX `moderncv` style, not the current HTML/Playwright cover-letter renderer: `\documentclass[11pt,a4paper,sans]{moderncv}`, `\moderncvstyle{classic}`, `\moderncvcolor{blue}`, `\moderncvicons{marvosym}`, `\usepackage{lmodern}`, `\usepackage{enumitem}` with `nosep` to keep it to one page.
+- Keep the editable `.tex` source next to the generated PDF in `output/` (same base name) and compile with `latexmk -pdf`.
+- Preserve the established structure: sender block, recipient/date, `Dear Hiring Team,`, concise opening, `Why this role resonates with me:`, `What I bring to {Company}:`, compact bullets, candid gap paragraph if useful, `With enthusiasm,`, signature.
+- Do not use `generate-cover-letter.mjs` for these matching-style letters unless the user asks for the HTML template specifically.
 
 ---
 

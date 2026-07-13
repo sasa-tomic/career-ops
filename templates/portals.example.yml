@@ -180,7 +180,14 @@ title_filter:
   positive:
     # [CUSTOMIZE] Add keywords matching YOUR target roles
     # -- AI/ML roles --
-    - "AI"
+    - "AI Engineer"
+    - "Applied AI"
+    - "AI Product"
+    - "AI Agent"
+    - "AI Platform"
+    - "AI Solutions"
+    - "AI Safety"
+    - "AI Infrastructure"
     - "ML"
     - "LLM"
     - "Agent"
@@ -202,8 +209,13 @@ title_filter:
     - "Weiterbildung"
     # -- Engineering roles --
     - "Platform Engineer"
+    - "Systems Engineer"
+    - "DevOps"
     - "Solutions Architect"
+    - "Cloud Architect"
+    - "Software Architect"
     - "Solutions Engineer"
+    - "Engineering Lead"
     - "Forward Deployed"
     - "Deployed Engineer"
     - "Customer Engineer"
@@ -465,7 +477,8 @@ search_queries:
 #
 # Provider routing (scan.mjs):
 #   By default each entry is auto-detected from `careers_url` against the
-#   loaded providers in providers/*.mjs (local-parser, ashby, greenhouse, lever).
+#   loaded providers in providers/*.mjs (local-parser, ashby, greenhouse, lever,
+#   workable, recruitee, smartrecruiters, workday, onlyfy, etc.).
 #   local-parser runs first when parser.command + parser.script are set.
 #
 #   Optional fields on a tracked_companies entry:
@@ -525,6 +538,7 @@ search_queries:
 #   amazon          amazon.jobs           (global board; provider: amazon + an amazon: filter block, see below)
 #   successfactors  *.successfactors.(eu|com) / *.jobs2web.com  (SAP SF Recruiting Marketing / RMK boards;
 #                   branded hosts like jobs.<company>.com need provider: successfactors + api: <board origin>)
+#   onlyfy          <slug>.onlyfy.jobs/<locale>
 #
 # When the public careers URL is a branded custom domain (e.g.
 # careers.adyen.com), set `provider: smartrecruiters` explicitly to
@@ -822,6 +836,48 @@ search_queries:
 #
 # company_aliases:
 #   Fin: [Intercom]
+# -- JobSpy board discovery (optional) --
+# Zero-token board scraper (python-jobspy) that reaches postings no tracked ATS
+# covers: LinkedIn, Indeed, Glassdoor, Google Jobs. scan.mjs spawns
+# scripts/jobspy-scan.py after the provider scan and feeds the results through
+# the same title/location filter + dedup. Novelty is guaranteed by URL dedup
+# (scan-history.tsv), NOT by hours_old. `node scan.mjs --since-last-scan` caps
+# hours_old to the time since your last scan.
+#
+# One-time install (creates .venv-jobspy/, which scan.mjs auto-detects):
+#   npm run jobspy:setup
+# It's enabled below so it runs by default once set up. If you skip setup,
+# scan.mjs prints one clear line telling you to run it and continues the rest
+# of the scan — set enabled: false to silence it entirely.
+jobspy:
+  enabled: true
+  # python:                         # optional — omit to auto-use .venv-jobspy.
+  #                                 # Set only to point at a different interpreter.
+  sites:                            # LinkedIn omitted by default — it rate-limits
+    - indeed                        # without proxies. Add "linkedin" once proxies
+    - google                        # are configured (it reaches roles the others
+    - glassdoor                     # miss — LinkedIn-only and custom-ATS postings).
+  search_terms:                     # [CUSTOMIZE] your target roles
+    - "AI Engineer"
+    - "Machine Learning Engineer"
+    - "MLOps"
+  locations:                        # [CUSTOMIZE] your target locations
+    - "Remote"
+  results_wanted: 25
+  hours_old: 168                    # 7 days; dedup handles novelty regardless
+  country_indeed: USA
+
+# -- Location filter (optional) --
+# [CUSTOMIZE] Uncomment and edit to restrict scanned jobs by location. Absent =
+# all locations pass. Semantics: empty location passes; any `block` keyword
+# rejects; non-empty `allow` requires at least one match (case-insensitive
+# substring). Location is user-specific — keep it in YOUR portals.yml.
+# location_filter:
+#   allow:
+#     - "Remote"
+#     - "Switzerland"
+#     - "Berlin"
+#   block: []
 
 tracked_companies:
 
@@ -833,9 +889,8 @@ tracked_companies:
     enabled: true
 
   - name: OpenAI
-    careers_url: https://openai.com/careers
-    scan_method: websearch
-    scan_query: 'site:openai.com/careers "Solutions" OR "Forward Deployed" OR "AI Engineer"'
+    careers_url: https://jobs.ashbyhq.com/openai
+    provider: ashby
     enabled: true
 
   # -- Voice AI & Conversational AI --
@@ -926,9 +981,9 @@ tracked_companies:
     enabled: true
 
   - name: RunPod
-    careers_url: https://job-boards.greenhouse.io/runpod
-    api: https://boards-api.greenhouse.io/v1/boards/runpod/jobs
-    notes: "GPU cloud for AI."
+    careers_url: https://jobs.ashbyhq.com/runpod
+    provider: ashby
+    notes: "GPU cloud for AI. Moved Greenhouse → Ashby (old greenhouse board 404'd)."
     enabled: true
 
   - name: Weights & Biases (CoreWeave)
@@ -1027,16 +1082,13 @@ tracked_companies:
     enabled: true
 
   - name: Lindy
-    careers_url: https://jobs.ashbyhq.com/lindy
-    scan_method: websearch
-    scan_query: '"lindy.ai" "AI" "Forward Deployed" OR "Solutions" site:jobs.ashbyhq.com'
+    careers_url: https://lindy.na.teamtailor.com
+    provider: teamtailor
     notes: "AI agent management platform."
     enabled: true
 
   - name: Cognigy
-    careers_url: https://careers.cognigy.com
-    scan_method: websearch
-    scan_query: '"cognigy" careers "AI" OR "Solutions" OR "Engineer"'
+    careers_url: https://apply.workable.com/cognigy
     notes: "Dusseldorf EMEA. Conversational AI enterprise."
     enabled: true
 
@@ -1063,9 +1115,8 @@ tracked_companies:
     enabled: true
 
   - name: Make.com (Celonis)
-    careers_url: https://www.make.com/en/careers
-    scan_method: websearch
-    scan_query: 'site:make.com/en/careers OR "make.com" "engineer" OR "solutions" site:jobs.ashbyhq.com'
+    careers_url: https://job-boards.greenhouse.io/make
+    api: https://boards-api.greenhouse.io/v1/boards/make/jobs
     notes: "Celonis parent company. Automation platform."
     enabled: true
 
@@ -1275,7 +1326,7 @@ tracked_companies:
     notes: "Berlin DE. Digital freight forwarder, product & data roles, German + English."
     enabled: true
 
-  # -- Switzerland / Austria AI --
+  # -- Switzerland / Austria tech & AI --
 
   - name: Lakera
     careers_url: https://jobs.ashbyhq.com/lakera.ai
@@ -1295,6 +1346,55 @@ tracked_companies:
     scan_method: websearch
     scan_query: 'site:jobs.ashbyhq.com/cradlebio'
     notes: "Zurich CH / Amsterdam. AI-guided protein design, ML researcher roles."
+    enabled: true
+
+  - name: SonarSource
+    careers_url: https://jobs.lever.co/sonarsource
+    notes: "Geneva CH. Code quality & security platform (SonarQube). Strong backend/infra hiring."
+    enabled: true
+
+  - name: Frontify
+    careers_url: https://jobs.lever.co/frontify
+    notes: "St. Gallen CH. Brand management SaaS scaleup."
+    enabled: true
+
+  - name: AnyBotics
+    careers_url: https://jobs.lever.co/anybotics
+    notes: "Zurich CH. Legged robotics for industrial inspection; ETH spin-off. Robotics/systems/reliability roles."
+    enabled: true
+
+  - name: Proton
+    careers_url: https://job-boards.eu.greenhouse.io/proton
+    api: https://boards-api.greenhouse.io/v1/boards/proton/jobs
+    notes: "Geneva CH. Privacy tech (Proton Mail/VPN/Drive). Geneva/Zurich infra & backend roles."
+    enabled: true
+
+  - name: DeepJudge
+    careers_url: https://jobs.ashbyhq.com/deepjudge
+    notes: "Zurich CH. AI-powered knowledge search for law firms; ETH spin-off."
+    enabled: true
+
+  - name: Parashift
+    careers_url: https://jobs.ashbyhq.com/parashift
+    notes: "Basel CH. Document-processing AI / intelligent data extraction platform."
+    enabled: true
+
+  - name: Leica Geosystems
+    careers_url: https://leica-geosystems-ag.onlyfy.jobs/de
+    provider: onlyfy
+    notes: "Heerbrugg CH (Hexagon). Surveying / geospatial / industrial measurement hardware + software. onlyfy.jobs (Prescreen) portal."
+    enabled: true
+
+  - name: Hexagon Robotics
+    careers_url: https://hexagon-robotics.onlyfy.jobs/en
+    provider: onlyfy
+    notes: "Zürich CH (Hexagon, incl. ANYbotics). Autonomous/legged robotics for industrial inspection. onlyfy.jobs portal; keep /en locale."
+    enabled: true
+
+  - name: Inventx
+    careers_url: https://inventx.onlyfy.jobs/de
+    provider: onlyfy
+    notes: "Swiss IT consulting (St. Gallen/Zürich CH). Data-platform, DevOps, database & automation engineering roles. onlyfy.jobs portal."
     enabled: true
 
   # -- France AI ecosystem --
@@ -1424,6 +1524,13 @@ tracked_companies:
     careers_url: https://job-boards.greenhouse.io/amplemarket
     api: https://boards-api.greenhouse.io/v1/boards/amplemarket/jobs
     notes: "Lisbon PT / Remote. AI-native sales platform."
+    enabled: true
+
+  # -- Crypto / Web3 infrastructure --
+
+  - name: Alpen Labs
+    careers_url: https://jobs.ashbyhq.com/alpenlabs
+    notes: "Bitcoin-native ZK/L2 protocol infrastructure (Strata). Rust, systems, protocol engineering and engineering leadership roles."
     enabled: true
 
   # -- AI / Developer Tools --

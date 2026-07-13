@@ -1,6 +1,8 @@
 # Mode: update — Interactive System Update
 
-When the user runs `/career-ops update`, execute this interactive update flow.
+When the user runs `/career-ops update` (or asks to update career-ops), execute this interactive update flow.
+
+> **HARD RULE (authoritative in `modes/_custom.md`): update ONLY by rebasing onto upstream. NEVER run `node update-system.mjs apply` / `npm run update`.** `apply` only syncs system-file snapshots and never merges git history, so a checkout with local commits (custom providers, parsers, local fixes/docs) silently keeps diverging even after a "successful" apply; its self-reexec can also break across releases. This mode uses `git rebase` exclusively. `update-system.mjs` is used only for the non-destructive `check` / `dismiss` subcommands.
 
 ## Step 1 — Check for Updates
 
@@ -9,11 +11,10 @@ Run `node update-system.mjs check` and parse the JSON output.
 - If `up-to-date`: Tell the user "career-ops is up to date (v{version})." and stop.
 - If `offline`: Tell the user "Cannot reach GitHub to check for updates. Try again later." and stop.
 - If `dismissed`: Tell the user "Update check was previously dismissed. Clearing the dismissal and re-checking now." Remove `.update-dismissed`, then re-run `node update-system.mjs check` and branch on the new status.
+- If `no-remote-version`: treat as offline (silent non-failure) and stop.
 - If `update-available`: Continue to Step 2.
 
-## Step 2 — Show What Changed
-
-Show the user what will change. Run:
+## Step 2 — Fetch and Show What Changed
 
 ```bash
 git fetch https://github.com/santifer/career-ops.git main || {
@@ -22,95 +23,68 @@ git fetch https://github.com/santifer/career-ops.git main || {
 }
 ```
 
-If the fetch fails, stop Step 2 and tell the user you couldn't preview the changes — don't proceed with a stale `FETCH_HEAD`.
+If the fetch fails, stop and tell the user you couldn't preview the changes — don't proceed on a stale `FETCH_HEAD`.
 
-Then, only if the fetch succeeded, for each System Layer file category show a summary:
+Only if the fetch succeeded, summarize the diff:
 
 ```bash
-git diff HEAD..FETCH_HEAD --stat -- modes/ CLAUDE.md AGENTS.md *.mjs batch/ dashboard/ templates/ docs/ VERSION DATA_CONTRACT.md
+git diff HEAD..FETCH_HEAD --stat -- modes/ AGENTS.md CLAUDE.md *.mjs providers/ scripts/ batch/ dashboard/ templates/ docs/ VERSION DATA_CONTRACT.md
 ```
 
-Present to the user as a clear summary:
+Present a concise summary (Modes / Scripts / Providers / Dashboard / Templates / Other file counts + the changelog from Step 1). Note: "Your personal files (cv.md, config/profile.yml, modes/_profile.md, modes/_custom.md, portals.yml, data/, reports/, output/, interview-prep/) will NOT be touched." Show specific diffs with `git diff HEAD..FETCH_HEAD -- {path}` on request.
 
-> **Update available: v{local} → v{remote}**
->
-> **Changes summary:**
-> - Modes: {N} files changed (list which ones)
-> - Scripts: {N} files changed
-> - Dashboard: {N} files changed
-> - Templates: {N} files changed
-> - Other: {N} files changed
->
-> **Changelog:**
-> {changelog from update-system.mjs check output}
->
-> Your personal files (CV, profile, tracker, reports) will NOT be touched.
+## Step 3 — Compatibility Check (read-only)
 
-If the user wants details on specific files, show the actual diff for those files using `git diff HEAD..FETCH_HEAD -- {path}`.
+Before rebasing, flag anything that could affect the user's customizations:
 
-## Step 3 — Compatibility Check
+1. Read `modes/_profile.md` (if it exists) — strictly read-only here.
+2. `git diff HEAD..FETCH_HEAD -- modes/_shared.md`.
+3. If the "Archetype Detection" section changed and `_profile.md` references archetype names, warn: "⚠️ Archetypes/scoring were updated; I'll reconcile `_profile.md` after the update."
+4. If new mode files exist upstream, mention them.
 
-Before applying, check if the update might affect the user's customizations:
+## Step 4 — Confirm, then Rebase (NEVER apply)
 
-1. **Read `modes/_profile.md`** (if it exists)
-2. **Diff `modes/_shared.md`**: Run `git diff HEAD..FETCH_HEAD -- modes/_shared.md`
-3. **Check for archetype changes**: If `_shared.md` has changes in the "Archetype Detection" section, and `_profile.md` references archetype names, warn the user:
-   > "⚠️ The scoring system or archetypes were updated. Your customizations in `_profile.md` may reference outdated archetype names. I'll review them after the update."
-4. **Check for scoring changes**: If the "Scoring System" section changed, note it:
-   > "ℹ️ The scoring system was updated. Scores in future evaluations may differ slightly from previous ones."
-5. **Check for new mode files**: If new modes were added (files in `modes/` that don't exist locally), mention them:
-   > "✨ New modes available: {list}. Run `/career-ops` to see all commands."
+Ask: "Ready to update to v{remote} by rebasing onto upstream. Your local commits and personal files are preserved. Proceed?"
 
-## Step 4 — Confirm and Apply
+If yes, run the rebase flow (this is the ONLY accepted update mechanism):
 
-Ask the user for confirmation:
-> "Ready to update. Apply changes? (This can be rolled back with `/career-ops update rollback`)"
-
-If yes:
-1. Capture the current commit as a run-specific pre-update baseline before apply runs, e.g. `PRE_UPDATE_REF=$(git rev-parse HEAD)`. Don't rely on `backup-pre-update-{local}` alone — `update-system.mjs apply` reuses that branch if it already exists, so it may point at an older snapshot.
-2. **Save local CLAUDE.md additions.** `update-system.mjs apply` treats CLAUDE.md as a system file and resets it to the two-line template (`@AGENTS.md` + the local-additions comment). Before applying, read the current CLAUDE.md and save everything after that two-line header — it will need to be restored in step 4 below. If CLAUDE.md has nothing beyond the two-line header, note that there is nothing to restore.
-3. Run `node update-system.mjs apply`, capturing its exit code without stopping on failure yet — the restore in step 4 must run either way.
-4. **Restore local CLAUDE.md additions**, regardless of whether step 3 succeeded or failed. `apply` resets CLAUDE.md before it can fail partway through, so a failed apply still leaves CLAUDE.md at the blank two-line template. Re-read CLAUDE.md and append the content saved in step 2 after the two-line header.
-5. Now check the exit code captured in step 3:
-   - If non-zero, treat apply as failed. Show the captured output and offer:
-     > "⚠️ Update apply failed. Want me to show the full error, or try `/career-ops update rollback`?"
-   - Stop the flow here if apply failed — do not run doctor or reconciliation on a partially-applied update.
-6. Run `node doctor.mjs` to validate the installation
-   - If the command exits with a non-zero code, treat validation as failed. Show the captured output and offer:
-     > "⚠️ Validation failed after update. Want me to show the full error, or roll back with `/career-ops update rollback`?"
-   - Stop the flow here if validation failed — do not run reconciliation or show the success message.
-7. If Step 3 flagged archetype/scoring changes, reconcile `modes/_profile.md` against the new `modes/_shared.md`:
-   - Read both the pre-update version (`git show $PRE_UPDATE_REF:modes/_shared.md`) and the post-update version of `modes/_shared.md`.
-   - Extract the canonical archetype identifiers from each version (archetype headings/definitions, plus any slug/alias fields).
-   - Read `modes/_profile.md` and look for tokens that match archetype names (inline text, Markdown links, YAML keys, code spans).
-   - Classify each reference:
-     - **Unchanged**: exact match in the new `_shared.md` → no action.
-     - **Renamed**: no exact match, but a single strong fuzzy match in the new `_shared.md` (e.g. Levenshtein similarity ≥ 0.7) → offer to rename.
-     - **Removed**: no match at all → offer to delete or replace.
-   - When a rename or removal is detected, ask before editing:
-     - For renames:
-       > "Your _profile.md references archetype '{old_name}' which was renamed to '{new_name}'. Want me to update it?"
-     - For removals:
-       > "Your _profile.md references archetype '{old_name}' which was removed in the new _shared.md. Want me to delete the reference or replace it with another archetype?"
-8. Show final status:
-   > "✅ Updated to v{version}. Run `node doctor.mjs` anytime to verify setup."
+1. **Clean tree first.** `git status --porcelain` must be clean. If there are uncommitted tracked changes, commit them (branch/commit as appropriate) or stash — do not rebase over a dirty tree. Untracked personal/ignored files are fine.
+2. **Record a recovery point:** `PRE_REBASE=$(git rev-parse HEAD)` (also recoverable via `git reflog`).
+3. **Fetch + rebase:**
+   ```bash
+   git fetch https://github.com/santifer/career-ops.git main
+   git rebase FETCH_HEAD
+   ```
+4. **Resolve conflicts file-by-file** — do NOT `--skip` or blindly pick a side without checking:
+   - Keep BOTH upstream improvements AND local features (custom providers, `scripts/parsers/*`, `scripts/full-scan.mjs`, JobSpy, onlyfy, geo-filter, Swiss/CH portals config). When both sides purely ADD independent entries (a script, a provider, a list item), keep both.
+   - `git rebase --skip` a local commit ONLY after concretely verifying upstream now ships an equivalent-or-better implementation (e.g. the file exists on `FETCH_HEAD`).
+   - Note the structure: upstream keeps doc content in `AGENTS.md` (`CLAUDE.md` is a `@AGENTS.md` pointer). Fold any local doc changes into `AGENTS.md`, not the old monolithic `CLAUDE.md`.
+   - Syntax-check every resolved file (`node --check x.mjs`; `node -e "JSON.parse(...)"` for JSON) BEFORE `git add` + `git rebase --continue`.
+5. **After the rebase completes:**
+   - Register any new local system files (e.g. `scripts/parsers/*.mjs`, new providers) in `update-system.mjs` `SYSTEM_PATHS` (checked by `validate-system-paths-coverage.mjs`).
+   - Run `node test-all.mjs`. Fix real regressions; re-run until green (or a failure is confirmed pre-existing/unrelated).
+   - Run `node doctor.mjs` to validate setup.
+6. If Step 3 flagged archetype/scoring changes, reconcile `modes/_profile.md` against the new `modes/_shared.md`:
+   - Compare `git show $PRE_REBASE:modes/_shared.md` vs the new `modes/_shared.md`; classify each `_profile.md` archetype reference as Unchanged / Renamed (single strong fuzzy match) / Removed.
+   - Ask before editing `_profile.md`, per change: "references archetype '{old}' which was renamed to '{new}' / removed — update it?" Never batch-edit without per-change consent.
+7. Show final status: "✅ Rebased onto v{version}. `node test-all.mjs` green. Run `node doctor.mjs` anytime to verify setup."
 
 If no:
-1. Run `node update-system.mjs dismiss`
-2. Tell the user they can run `/career-ops update` anytime to check again.
+1. Run `node update-system.mjs dismiss`.
+2. Tell the user they can run `/career-ops update` anytime.
 
-## Step 5 — Rollback (if requested)
+## Step 5 — Recovery / Rollback (if requested)
 
-If the user says "rollback" or runs `/career-ops update rollback`:
-1. Run `node update-system.mjs rollback`
-2. Show what was restored.
+Rebase is abortable and reversible:
+- **Mid-rebase** (before it completes): `git rebase --abort` restores the pre-rebase state — always safe.
+- **After completion:** find the pre-rebase SHA with `git reflog`, confirm with the user, then `git reset --hard <PRE_REBASE_SHA>`.
+- Do NOT use `node update-system.mjs rollback` (that undoes the forbidden checkout-based `apply`, which this mode never runs).
+- NEVER `git push --force` or rewrite already-pushed history without the user's explicit go-ahead.
 
 ## Rules
 
-- NEVER auto-modify User Layer files during update (cv.md, config/profile.yml, data/, reports/, output/, interview-prep/, jds/, article-digest.md, portals.yml)
-- `modes/_profile.md` is User Layer too: the compatibility check in Step 3 reads it strictly read-only
-- Exception: `modes/_profile.md` may be edited **only** in Step 4.7, and **only** after the user explicitly confirms each individual rename/removal. Never batch-edit without per-change consent.
-- User-specific customizations (archetypes, scoring weights, narrative) belong in `modes/_profile.md` or `config/profile.yml`, never in `modes/_shared.md`
-- CLAUDE.md's local additions (everything after the two-line `@AGENTS.md` header) MUST be saved before apply and restored immediately after — on both the success AND failure path (Step 4.2, Step 4.4). `update-system.mjs apply` resets CLAUDE.md before it can fail partway through, so a failed apply still needs the restore. `apply` has no awareness of this content and will silently discard it otherwise.
-- If anything goes wrong, tell the user to run `node update-system.mjs rollback`
-- Keep the output concise — users don't want walls of text during an update
+- **NEVER run `node update-system.mjs apply` / `npm run update`.** Rebase only. (Authoritative HARD RULE: `modes/_custom.md`.)
+- NEVER auto-modify User Layer files during update (`cv.md`, `config/profile.yml`, `modes/_profile.md`, `modes/_custom.md`, `data/`, `reports/`, `output/`, `interview-prep/`, `jds/`, `article-digest.md`, `portals.yml`). These are gitignored, so the rebase does not touch them.
+- `modes/_profile.md` may be edited **only** in Step 4.6, and **only** after the user confirms each individual rename/removal.
+- User-specific customizations (archetypes, scoring weights, narrative) belong in `modes/_profile.md` or `config/profile.yml`; procedural/house rules belong in `modes/_custom.md`; never in `modes/_shared.md`.
+- Keep output concise — users don't want walls of text during an update.

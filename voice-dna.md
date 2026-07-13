@@ -221,3 +221,19 @@ This document captures taste. It is a guide. Apply it with judgment.
 
 If it feels forced, pull back. Inhabit the voice.
 
+---
+
+## 6. Real edit, real lesson (cover letter, 2026-07)
+
+I hand-rewrote an AI draft. The diff is the clearest signal in this whole doc.
+
+- **Cut the whole gap-disclosure paragraph.** The AI pre-emptively confessed a skill gap nobody asked about. A real person doesn't volunteer every weakness up front. If it's not asked, don't raise it.
+- **Cut sentences that justify logistics nobody's worried about.** ("I'm already based in Zürich, so hybrid weeks are easy" — deleted entirely. Not wrong, just not needed.)
+- **Blunt words beat polished metaphors.** AI wrote "turn a slow, fragile day into a fast, predictable one." The edit: chasing "boring" (quoted, worn as a badge, not an apology).
+- **Exclamation marks are allowed when something is a genuine small victory.** "It was a race against time, and we won!" beats "I am genuinely glad to make X a first-class part of Y." AI is scared of exclamation points. Don't be.
+- **Warmth beats polish in people-claims.** "We are still in touch as friends" beats a generic mentorship/architecture-review bullet, even though it's less "information-dense." Real relationships read as real precisely because they aren't optimized.
+- **Redundant emphasis is fine.** "Fully owned," "far more reasonable" — a real person double-underlines sometimes instead of trimming to the single tightest word.
+- **End a paragraph on a short fragment when it earned it.** One longer sentence, then a period-stop fragment restating the outcome in a handful of words. ("All by automations and removing humans from the loop.")
+
+The meta-lesson: **AI writing tries to cover everything and pre-empt every doubt. Real writing cuts what doesn't matter and commits to what does.** If a paragraph exists only to head off an objection nobody raised, ask whether a real person would actually volunteer it unprompted. Usually not.
+
