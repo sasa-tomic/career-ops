@@ -237,3 +237,14 @@ I hand-rewrote an AI draft. The diff is the clearest signal in this whole doc.
 
 The meta-lesson: **AI writing tries to cover everything and pre-empt every doubt. Real writing cuts what doesn't matter and commits to what does.** If a paragraph exists only to head off an objection nobody raised, ask whether a real person would actually volunteer it unprompted. Usually not.
 
+---
+
+## 7. Cover-letter gaps: name it once, then pivot (2026-07-14)
+
+Editing the Keyrock letter, Saša cut two stiff gap-openers back to back ("I should be straight about one thing," then "Let me be upfront about the one gap").
+
+- **Ask before you disclose a gap. Do not guess.** When a JD names a requirement the source files (cv.md, article-digest.md, config/profile.yml, modes/_profile.md) do not cover, stop and ask the user before writing anything: "The JD wants [X], do you have any [relevant] experience or context I should include?" Do NOT manufacture a generic hedge ("my experience is hands-on rather than professional"). Saša usually has real, undocumented depth: on Keyrock I wrote a vague "personal, not desk-side" line, and he actually had 10+ years of options trading plus automated bots he'd built. Only write a candid concession once he confirms he lacks the experience or does not want it in the letter.
+- **Kill the templated concession opener.** The wind-up ("I should be straight about one thing:", "Let me be upfront:") is throat-clearing. Delete it and start with the sentence itself.
+- **A gap only earns a mention when it's a hard JD requirement the reader will notice anyway.** Then name it in one clause and pivot straight to the strongest concrete counter-fact: "While I have not run a systematic options desk full time, my options experience is hands-on and personal, spanning more than ten years, and I've built automated options bots multiple times." Numbers and real history carry it; soft reassurance ("a short ramp, not a wall") can trail but never leads.
+- **This is a real concession, not the 3F reframe tell.** 3F bans *empty* reframes that add no information. A concession carrying real facts (what you have done vs. haven't) is honest and fine. Test: does the "not X" clause give the reader something they need? Hard-requirement mismatch, yes. Invented weakness, no, so cut it entirely (see section 6).
+
